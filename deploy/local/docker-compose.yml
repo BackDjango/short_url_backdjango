@@ -1,0 +1,27 @@
+version: "3"
+
+services:
+  db:
+    container_name: mysql
+    image: mysql:8
+    command:
+      [
+        "--character-set-server=utf8mb4",
+        "--collation-server=utf8mb4_unicode_ci",
+      ]
+    volumes:
+      - test_data:/var/lib/mysql
+    networks:
+      - back-tier
+    ports:
+      - 3306:3306
+    env_file:
+      - ../../.env
+    restart: always
+
+volumes:
+  test_data:
+
+networks:
+  back-tier:
+    driver: bridge

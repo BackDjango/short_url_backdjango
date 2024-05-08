@@ -1,0 +1,20 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black # 훅의 고유 식별자
+        name: black-test # 훅의 이름
+        entry: black --check -l 150 -t py311 .
+        always_run: true # true시 모든 커밋 시 훅을 실행하라는 의미
+        pass_filenames: false # 이는 파일 이름을 명령어에 전달하지 않음을 의미
+        language: system # 시스템 기본 Python 환경을 사용
+        types: [python] # 훅이 적용될 파일 유형, 여기서는 Python 파일만 대상
+  
+  - repo: local
+    hooks:
+      - id: django-test
+        name: django-test
+        entry: python manage.py test apps --keepdb --verbosity=2
+        always_run: true
+        pass_filenames: false
+        language: system
+        types: [python]
