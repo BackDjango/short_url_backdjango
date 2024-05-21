@@ -5,7 +5,6 @@
 """
 
 # System
-from datetime import datetime
 from django.shortcuts import redirect
 from rest_framework import status
 from rest_framework.viewsets import ViewSet
@@ -17,10 +16,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from core.constants import SYSTEM_CODE
 from core.exception import raise_exception
 from core.response import create_response
-from core.algorithm import Algorithm
 from core.swagger import common_response_schema
-from apps.short_url.models import ShortURL
-from apps.short_url.serializers import ShortURLSerializer
+from apps.short_url.serializers import (
+    ShortURLSerializer,
+    ShortURLRedirectSerializer,
+    ShortURLDeleteSerializer,
+)
 
 
 @extend_schema(
@@ -82,23 +83,13 @@ class ShortURLViewSet(ViewSet):
         localhost:8000/{short_url}로 접속하면 Redirect
         """
 
-        # Base62 디코딩
-        decoded = Algorithm.base62_decode(url)
+        serializer = ShortURLRedirectSerializer(data={"request_url": url})
+        # Validation Check
+        if not serializer.is_valid():
+            raise_exception(code=SYSTEM_CODE.INVALID_FORMAT)
+        original_url = serializer.save()
 
-        short_url = ShortURL.objects.filter(hash_value=decoded, deleted_at=None).first()
-
-        # 존재 하지 않는 URL
-        if not short_url:
-            raise_exception(code=SYSTEM_CODE.SHORT_URL_NOT_FOUND)
-
-        # 만료된 URL
-        if short_url.expiration_date and short_url.expiration_date < datetime.now():
-            raise_exception(code=SYSTEM_CODE.SHORT_URL_EXPIRED)
-
-        short_url.request_count += 1
-        short_url.save()
-
-        return redirect(short_url.url)
+        return redirect(original_url)
 
     @extend_schema(
         summary="Short URL 삭제",
@@ -114,18 +105,13 @@ class ShortURLViewSet(ViewSet):
         """
         Short URL 삭제 API
         """
-        user = request.user
 
-        # Base62 디코딩
-        decoded = Algorithm.base62_decode(url)
+        serializer = ShortURLDeleteSerializer(data={"request_url": url}, context={"request": request})
 
-        short_url = ShortURL.objects.filter(hash_value=decoded, deleted_at=None, user=user).first()
+        # Validation Check
+        if not serializer.is_valid():
+            raise_exception(code=SYSTEM_CODE.INVALID_FORMAT)
 
-        if not short_url:
-            raise_exception(code=SYSTEM_CODE.SHORT_URL_NOT_FOUND)
-
-        # 현재 시간으로 삭제 처리
-        short_url.deleted_at = datetime.now()
-        short_url.save()
+        serializer.save()
 
         return create_response(status=status.HTTP_204_NO_CONTENT)

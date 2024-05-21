@@ -37,22 +37,78 @@ class ShortURLSerializer(serializers.Serializer):
             raise_exception(code=SYSTEM_CODE.EXPIRATION_DATE_INVALID)
         return data
 
-    def create(self, validated_data):
-        url = validated_data["url"]
-        expiration_date = validated_data.get("expiration_date")
+    def _generated_short_url(self, url, expiration_date=None):
+        """
+        Short URL 생성 및 반환 하는 내부 함수
 
-        # URL 해시값 생성
+        URL을 해싱하여 Short URL을 생성한다.
+        만료일시가 존재하면 해당 일시까지 유효하다.
+        생성 후 Base62 인코딩하여 반환한다.
+        """
         hash_value = Algorithm.hash_url(url=url)
 
-        # Short URL 생성
         short_url = ShortURL.objects.create(
             url=url,
             hash_value=hash_value,
             expiration_date=expiration_date,
             user=self.context["request"].user,
         )
-
-        # Base62 인코딩
         encoded = Algorithm.base62_encode(short_url.hash_value)
 
+        return encoded
+
+    def create(self, validated_data):
+        """
+        Short URL 생성
+        """
+        url = validated_data["url"]
+        expiration_date = validated_data.get("expiration_date")
+
+        encoded = self._generated_short_url(url, expiration_date)
+
         return {"encoded": encoded}
+
+
+class ShortURLRedirectSerializer(serializers.Serializer):
+    request_url = serializers.CharField(max_length=7, required=True, label="Short URL")
+
+    def validate_request_url(self, data):
+        decoded = Algorithm.base62_decode(data)
+
+        short_url = ShortURL.objects.filter(hash_value=decoded, deleted_at=None).first()
+        if not short_url:
+            raise_exception(code=SYSTEM_CODE.SHORT_URL_NOT_FOUND)
+
+        if short_url.expiration_date and short_url.expiration_date < datetime.now():
+            raise_exception(code=SYSTEM_CODE.SHORT_URL_EXPIRED)
+        return short_url
+
+    def save(self):
+        short_url = self.validated_data["request_url"]
+        short_url.request_count += 1
+        short_url.save()
+
+        return short_url.url
+
+
+class ShortURLDeleteSerializer(serializers.Serializer):
+    request_url = serializers.CharField(max_length=7, required=True, label="Short URL")
+
+    def validate_request_url(self, data):
+        # Base62 디코딩
+        decoded = Algorithm.base62_decode(data)
+
+        short_url = ShortURL.objects.filter(hash_value=decoded, deleted_at=None, user=self.context["request"].user).first()
+
+        # 존재 하지 않는 URL 처리
+        if not short_url:
+            raise_exception(code=SYSTEM_CODE.SHORT_URL_NOT_FOUND)
+        return short_url
+
+    def save(self):
+        short_url = self.validated_data["request_url"]
+
+        # 현재 시간으로 삭제 처리
+        short_url.deleted_at = datetime.now()
+        short_url.save()
+        return None
