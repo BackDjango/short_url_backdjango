@@ -28,12 +28,15 @@ ALLOWED_HOSTS = ["*"]
 LOCAL_APPS = [
     "apps",
     "apps.users",
+    "apps.short_url",
     "core",
 ]
 
 THIRD_PARTY_APPS = [
     "rest_framework",
     "drf_spectacular",
+    "corsheaders",
+    "django_harlequin",
 ]
 
 INSTALLED_APPS = [
@@ -55,6 +58,8 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
