@@ -5,14 +5,15 @@
 """
 
 # System
-from datetime import datetime
+from django.db.models import Count
+from datetime import datetime, timezone, timedelta
 from rest_framework import serializers
 
 # Project
 from core.constants import SYSTEM_CODE
 from core.exception import raise_exception
 from core.algorithm import Algorithm
-from apps.short_url.models import ShortURL
+from apps.short_url.models import ShortURL, Visit
 
 
 class ShortURLSerializer(serializers.Serializer):
@@ -88,6 +89,12 @@ class ShortURLRedirectSerializer(serializers.Serializer):
         short_url.request_count += 1
         short_url.save()
 
+        # 방문자 추적 저장
+        Visit.objects.create(
+            short_url=short_url,
+            referrer=self.context["request"].META.get("HTTP_REFERER"),
+        )
+
         return short_url.url
 
 
@@ -112,3 +119,54 @@ class ShortURLDeleteSerializer(serializers.Serializer):
         short_url.deleted_at = datetime.now()
         short_url.save()
         return None
+
+
+class ShortURLVisitSerializer(serializers.Serializer):
+    request_url = serializers.CharField(max_length=7, required=True, write_only=True, label="Short URL")
+    daily_visits = serializers.SerializerMethodField(label="일간 조회수(최근 7일)")
+    total_visits = serializers.SerializerMethodField(label="총 조회수")
+    referrers = serializers.SerializerMethodField(label="리퍼러별 조회수")
+
+    def validate_request_url(self, data):
+        # Base62 디코딩
+        decoded = Algorithm.base62_decode(data)
+
+        short_url = ShortURL.objects.filter(hash_value=decoded, deleted_at=None, user=self.context["request"].user).first()
+
+        # 존재 하지 않는 URL 처리
+        if not short_url:
+            raise_exception(code=SYSTEM_CODE.SHORT_URL_NOT_FOUND)
+
+        self.short_url = short_url
+
+        return short_url
+
+    def get_daily_visits(self, obj):
+        # 최근 7일간 일별 방문 통계를 계산합니다.
+
+        recent_visits = (
+            Visit.objects.filter(
+                short_url=self.short_url,
+                created_at__gte=datetime.now() - timedelta(days=7),
+            )
+            .extra({"day": "date(created_at)"})
+            .values("day")
+            .annotate(count=Count("id"))
+            .order_by("day")
+        )
+        return list(recent_visits)
+
+    def get_total_visits(self, obj):
+        return self.short_url.request_count
+
+    def get_referrers(self, obj):
+        # 리퍼러별 방문 통계를 계산합니다.
+        referrer_counts = (
+            Visit.objects.filter(
+                short_url=self.short_url,
+            )
+            .values("referrer")
+            .annotate(count=Count("id"))
+            .order_by("-count")
+        )
+        return list(referrer_counts)

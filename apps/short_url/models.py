@@ -30,3 +30,20 @@ class ShortURL(BaseModel):
 
     class Meta:
         db_table = "short_url"
+
+
+class Visit(BaseModel):
+    """
+    방문자 추적을 위한 Visit 모델입니다.
+    """
+
+    referrer = models.URLField(null=True, blank=True, verbose_name="referrer URL")
+
+    short_url = models.ForeignKey(
+        "short_url.ShortURL",
+        on_delete=models.CASCADE,
+        related_name="visits",
+    )
+
+    class Meta:
+        db_table = "visit"

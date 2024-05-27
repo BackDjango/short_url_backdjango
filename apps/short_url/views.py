@@ -21,6 +21,7 @@ from apps.short_url.serializers import (
     ShortURLSerializer,
     ShortURLRedirectSerializer,
     ShortURLDeleteSerializer,
+    ShortURLVisitSerializer,
 )
 
 
@@ -83,7 +84,7 @@ class ShortURLViewSet(ViewSet):
         localhost:8000/{short_url}로 접속하면 Redirect
         """
 
-        serializer = ShortURLRedirectSerializer(data={"request_url": url})
+        serializer = ShortURLRedirectSerializer(data={"request_url": url}, context={"request": request})
         # Validation Check
         if not serializer.is_valid():
             raise_exception(code=SYSTEM_CODE.INVALID_FORMAT)
@@ -115,3 +116,18 @@ class ShortURLViewSet(ViewSet):
         serializer.save()
 
         return create_response(status=status.HTTP_204_NO_CONTENT)
+
+    def get_visit_short_url(self, request, url):
+        """
+        Short URL 통계 조회 API
+        """
+
+        print("url: ", url)
+
+        serializer = ShortURLVisitSerializer(data={"request_url": url}, context={"request": request})
+
+        # Validation Check
+        if not serializer.is_valid():
+            raise_exception(code=SYSTEM_CODE.INVALID_FORMAT)
+
+        return create_response(data=serializer.data, status=status.HTTP_200_OK)

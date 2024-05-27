@@ -22,6 +22,7 @@ urlpatterns = [
         ShortURLViewSet.as_view({"get": "get_redirect"}),
         name="get-redirect",
     ),
+    path("<str:url>/+", ShortURLViewSet.as_view({"get": "get_visit_short_url"})),
 ]
 
 # Swagger
